@@ -2,7 +2,6 @@ require("dotenv").config();
 
 const express = require("express");
 const axios = require("axios");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 const app = express();
 app.use(express.json());
@@ -18,24 +17,36 @@ if (!ACCESS_TOKEN || !PHONE_NUMBER_ID || !GEMINI_API_KEY) {
   console.log("❌ Missing ENV variables. Check Render Environment!");
 }
 
-// 🤖 Gemini init
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
-
-// 🔹 Gemini function (FIXED MODEL)
+// 🤖 Gemini function (DIRECT API - FIXED)
 async function getGeminiReply(userMessage) {
   try {
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.0-pro" // ✅ stable model
-    });
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            parts: [
+              {
+                text: `Reply in short WhatsApp style (friendly, Hinglish allowed): ${userMessage}`
+              }
+            ]
+          }
+        ]
+      },
+      {
+        headers: {
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-    const prompt = `Reply in short WhatsApp style (friendly, concise, Hinglish allowed): ${userMessage}`;
-
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const text =
+      response.data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Hmm… try again 🤖";
 
     return text.slice(0, 1500);
   } catch (error) {
-    console.log("🔥 Gemini FULL ERROR:", error.response?.data || error.message);
+    console.log("🔥 GEMINI ERROR:", error.response?.data || error.message);
     return "AI error aa gaya 😅 try again.";
   }
 }
@@ -76,7 +87,7 @@ app.post("/webhook", async (req, res) => {
         reply = await getGeminiReply(text);
       }
 
-      // 📩 Send message
+      // 📩 Send message to WhatsApp
       await axios.post(
         `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
         {
