@@ -17,52 +17,38 @@ if (!ACCESS_TOKEN || !PHONE_NUMBER_ID || !GEMINI_API_KEY) {
   console.log("❌ Missing ENV variables. Check Render Environment!");
 }
 
-// 🤖 Gemini function (with fallback)
+// 🤖 Gemini function (FINAL FIXED)
 async function getGeminiReply(userMessage) {
-  const models = [
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-flash",
-    "gemini-pro"
-  ];
-
-  for (let model of models) {
-    try {
-      console.log("Trying model:", model);
-
-      const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          contents: [
-            {
-              parts: [
-                {
-                  text: `Reply in short WhatsApp style (friendly, Hinglish allowed): ${userMessage}`
-                }
-              ]
-            }
-          ]
-        },
-        {
-          headers: {
-            "Content-Type": "application/json"
+  try {
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        contents: [
+          {
+            parts: [
+              {
+                text: `Reply in short WhatsApp style (friendly, Hinglish allowed): ${userMessage}`
+              }
+            ]
           }
+        ]
+      },
+      {
+        headers: {
+          "Content-Type": "application/json"
         }
-      );
-
-      const text =
-        response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (text) {
-        return text.slice(0, 1500);
       }
+    );
 
-    } catch (error) {
-      console.log(`❌ Model failed: ${model}`);
-      console.log(error.response?.data || error.message);
-    }
+    const text =
+      response.data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "Hmm… try again 🤖";
+
+    return text.slice(0, 1500);
+  } catch (error) {
+    console.log("🔥 GEMINI ERROR:", error.response?.data || error.message);
+    return "AI error aa gaya 😅 try again.";
   }
-
-  return "AI error aa gaya 😅 try again.";
 }
 
 // 🔹 Verify Webhook
@@ -101,7 +87,7 @@ app.post("/webhook", async (req, res) => {
         reply = await getGeminiReply(text);
       }
 
-      // 📩 Send message
+      // 📩 Send message to WhatsApp
       await axios.post(
         `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
         {
