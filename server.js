@@ -1,21 +1,45 @@
-const express = require('express');
-const axios = require('axios');
-const app = express();
+require("dotenv").config();
 
+const express = require("express");
+const axios = require("axios");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+const app = express();
 app.use(express.json());
 
-// 🔐 ENV VARIABLES
+// 🔐 ENV
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "bhavesh123";
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// 🔹 VERIFY WEBHOOK (Meta verification)
-app.get('/webhook', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
+// 🤖 Gemini init
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+// 🔹 Gemini function
+async function getGeminiReply(userMessage) {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+    const prompt = `Reply in short WhatsApp style (friendly, concise, Hinglish allowed if needed): ${userMessage}`;
+
+    const result = await model.generateContent(prompt);
+    const text = result?.response?.text?.() || "Hmm… try again 🤖";
+
+    return text.slice(0, 1500); // safety trim
+  } catch (error) {
+    console.log("Gemini Error:", error.message);
+    return "AI error aa gaya 😅 try again.";
+  }
+}
+
+// 🔹 Verify Webhook (Meta)
+app.get("/webhook", (req, res) => {
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode === "subscribe" && token === VERIFY_TOKEN) {
     console.log("Webhook verified ✅");
     return res.status(200).send(challenge);
   } else {
@@ -23,8 +47,8 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// 🔹 RECEIVE MESSAGE + AUTO REPLY
-app.post('/webhook', async (req, res) => {
+// 🔹 Receive message + AI reply
+app.post("/webhook", async (req, res) => {
   try {
     console.log("Incoming 🔥:", JSON.stringify(req.body, null, 2));
 
@@ -32,22 +56,23 @@ app.post('/webhook', async (req, res) => {
 
     if (message) {
       const from = message.from;
-      const text = message.text?.body?.toLowerCase();
+      const text = message.text?.body?.toLowerCase() || "";
 
       console.log("User:", text);
 
-      let reply = "Default reply 🤖";
+      let reply = "";
 
-      // 🔥 SMART RESPONSES
+      // 🎯 Custom quick replies
       if (text === "hi" || text === "hello") {
         reply = "Hello Bhavesh 😎";
       } else if (text === "help") {
-        reply = "How can I help you?";
+        reply = "Ask me anything 🤖";
       } else {
-        reply = `You said: ${text} 😎`;
+        // 🤖 Gemini AI reply
+        reply = await getGeminiReply(text);
       }
 
-      // 🔹 SEND MESSAGE BACK
+      // 🔹 Send reply to WhatsApp
       await axios.post(
         `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
         {
@@ -71,11 +96,11 @@ app.post('/webhook', async (req, res) => {
   }
 });
 
-// 🔹 ROOT ROUTE (health check)
-app.get('/', (req, res) => {
-  res.send("Webhook server running 🚀");
+// 🔹 Health check
+app.get("/", (req, res) => {
+  res.send("WhatsApp + Gemini bot running 🚀");
 });
 
-// 🔹 PORT (Render ke liye important)
+// 🔹 Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on port " + PORT));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
