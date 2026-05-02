@@ -1,13 +1,16 @@
 const express = require('express');
+const axios = require('axios');
 const app = express();
 
-// JSON parse (future ke liye useful)
 app.use(express.json());
 
-// 🔹 VERIFY WEBHOOK (GET request)
-app.get('/webhook', (req, res) => {
-  const VERIFY_TOKEN = "bhavesh123";
+// 🔐 ENV VARIABLES
+const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "bhavesh123";
+const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
+const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 
+// 🔹 VERIFY WEBHOOK (Meta verification)
+app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
@@ -20,22 +23,59 @@ app.get('/webhook', (req, res) => {
   }
 });
 
-// 🔹 RECEIVE MESSAGES (POST request)
-app.post('/webhook', (req, res) => {
-  console.log("Incoming webhook data 🔥:");
-  console.log(JSON.stringify(req.body, null, 2));
+// 🔹 RECEIVE MESSAGE + AUTO REPLY
+app.post('/webhook', async (req, res) => {
+  try {
+    console.log("Incoming 🔥:", JSON.stringify(req.body, null, 2));
 
-  // Always respond 200 OK
-  res.sendStatus(200);
+    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+
+    if (message) {
+      const from = message.from;
+      const text = message.text?.body?.toLowerCase();
+
+      console.log("User:", text);
+
+      let reply = "Default reply 🤖";
+
+      // 🔥 SMART RESPONSES
+      if (text === "hi" || text === "hello") {
+        reply = "Hello Bhavesh 😎";
+      } else if (text === "help") {
+        reply = "How can I help you?";
+      } else {
+        reply = `You said: ${text} 😎`;
+      }
+
+      // 🔹 SEND MESSAGE BACK
+      await axios.post(
+        `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
+        {
+          messaging_product: "whatsapp",
+          to: from,
+          text: { body: reply }
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${ACCESS_TOKEN}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error("Error:", err.response?.data || err.message);
+    res.sendStatus(500);
+  }
 });
 
-// 🔹 ROOT (optional check)
+// 🔹 ROOT ROUTE (health check)
 app.get('/', (req, res) => {
   res.send("Webhook server running 🚀");
 });
 
-// 🔹 PORT (IMPORTANT for Render)
+// 🔹 PORT (Render ke liye important)
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log("Server running on port " + PORT);
-  });
+app.listen(PORT, () => console.log("Server running on port " + PORT));
