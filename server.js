@@ -7,28 +7,35 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const app = express();
 app.use(express.json());
 
-// 🔐 ENV
+// 🔐 ENV VARIABLES
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "bhavesh123";
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+// 🚨 Safety check
+if (!ACCESS_TOKEN || !PHONE_NUMBER_ID || !GEMINI_API_KEY) {
+  console.log("❌ Missing ENV variables. Check Render Environment!");
+}
+
 // 🤖 Gemini init
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-// 🔹 Gemini function
+// 🔹 Gemini function (UPDATED MODEL)
 async function getGeminiReply(userMessage) {
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash"
+    });
 
-    const prompt = `Reply in short WhatsApp style (friendly, concise, Hinglish allowed if needed): ${userMessage}`;
+    const prompt = `Reply in short WhatsApp style (friendly, concise, Hinglish allowed): ${userMessage}`;
 
     const result = await model.generateContent(prompt);
-    const text = result?.response?.text?.() || "Hmm… try again 🤖";
+    const text = result.response.text();
 
-    return text.slice(0, 1500); // safety trim
+    return text.slice(0, 1500);
   } catch (error) {
-    console.log("Gemini Error:", error.message);
+    console.log("🔥 Gemini FULL ERROR:", error.response?.data || error.message);
     return "AI error aa gaya 😅 try again.";
   }
 }
@@ -91,7 +98,7 @@ app.post("/webhook", async (req, res) => {
 
     res.sendStatus(200);
   } catch (err) {
-    console.error("Error:", err.response?.data || err.message);
+    console.error("❌ WhatsApp Error:", err.response?.data || err.message);
     res.sendStatus(500);
   }
 });
