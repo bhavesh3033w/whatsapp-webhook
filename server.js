@@ -10,58 +10,42 @@ app.use(express.json());
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "bhavesh123";
 const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// 🚨 Safety check
-if (!ACCESS_TOKEN || !PHONE_NUMBER_ID || !GEMINI_API_KEY) {
-  console.log("❌ Missing ENV variables. Check Render Environment!");
+// 🚨 Check
+if (!ACCESS_TOKEN || !PHONE_NUMBER_ID || !OPENAI_API_KEY) {
+  console.log("❌ Missing ENV variables!");
 }
 
-// 🤖 Gemini function (FINAL with fallback)
-async function getGeminiReply(userMessage) {
-  const models = [
-    "gemini-1.5-flash-001", // try this first
-    "gemini-1.0-pro"        // fallback (most stable)
-  ];
-
-  for (let model of models) {
-    try {
-      console.log("Trying model:", model);
-
-      const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          contents: [
-            {
-              parts: [
-                {
-                  text: `Reply in short WhatsApp style (friendly, Hinglish allowed): ${userMessage}`
-                }
-              ]
-            }
-          ]
-        },
-        {
-          headers: {
-            "Content-Type": "application/json"
+// 🤖 OpenRouter AI function
+async function getAIReply(userMessage) {
+  try {
+    const response = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "openai/gpt-3.5-turbo",
+        messages: [
+          {
+            role: "user",
+            content: `Reply in short WhatsApp style (friendly Hinglish): ${userMessage}`
           }
+        ]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
         }
-      );
-
-      const text =
-        response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-      if (text) {
-        return text.slice(0, 1500);
       }
+    );
 
-    } catch (error) {
-      console.log(`❌ Model failed: ${model}`);
-      console.log(error.response?.data || error.message);
-    }
+    const text = response.data.choices?.[0]?.message?.content || "Hmm… try again 🤖";
+    return text.slice(0, 1500);
+
+  } catch (error) {
+    console.log("🔥 AI ERROR:", error.response?.data || error.message);
+    return "AI error aa gaya 😅 try again.";
   }
-
-  return "AI error aa gaya 😅 try again.";
 }
 
 // 🔹 Verify Webhook
@@ -97,10 +81,10 @@ app.post("/webhook", async (req, res) => {
       } else if (text === "help") {
         reply = "Ask me anything 🤖";
       } else {
-        reply = await getGeminiReply(text);
+        reply = await getAIReply(text);
       }
 
-      // 📩 Send reply
+      // 📩 Send message
       await axios.post(
         `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
         {
@@ -126,7 +110,7 @@ app.post("/webhook", async (req, res) => {
 
 // 🔹 Health check
 app.get("/", (req, res) => {
-  res.send("WhatsApp + Gemini bot running 🚀");
+  res.send("WhatsApp AI bot running 🚀");
 });
 
 // 🔹 Start server
