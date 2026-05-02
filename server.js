@@ -21,11 +21,11 @@ if (!ACCESS_TOKEN || !PHONE_NUMBER_ID || !GEMINI_API_KEY) {
 // 🤖 Gemini init
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
-// 🔹 Gemini function (UPDATED MODEL)
+// 🔹 Gemini function (FIXED MODEL)
 async function getGeminiReply(userMessage) {
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash"
+      model: "gemini-1.0-pro" // ✅ stable model
     });
 
     const prompt = `Reply in short WhatsApp style (friendly, concise, Hinglish allowed): ${userMessage}`;
@@ -40,7 +40,7 @@ async function getGeminiReply(userMessage) {
   }
 }
 
-// 🔹 Verify Webhook (Meta)
+// 🔹 Verify Webhook
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -54,11 +54,9 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-// 🔹 Receive message + AI reply
+// 🔹 Receive message + reply
 app.post("/webhook", async (req, res) => {
   try {
-    console.log("Incoming 🔥:", JSON.stringify(req.body, null, 2));
-
     const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
     if (message) {
@@ -69,17 +67,16 @@ app.post("/webhook", async (req, res) => {
 
       let reply = "";
 
-      // 🎯 Custom quick replies
+      // 🎯 Custom replies
       if (text === "hi" || text === "hello") {
         reply = "Hello Bhavesh 😎";
       } else if (text === "help") {
         reply = "Ask me anything 🤖";
       } else {
-        // 🤖 Gemini AI reply
         reply = await getGeminiReply(text);
       }
 
-      // 🔹 Send reply to WhatsApp
+      // 📩 Send message
       await axios.post(
         `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
         {
