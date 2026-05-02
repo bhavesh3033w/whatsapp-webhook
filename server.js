@@ -12,12 +12,12 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// 🚨 Check
+// 🚨 Safety check
 if (!ACCESS_TOKEN || !PHONE_NUMBER_ID || !OPENAI_API_KEY) {
   console.log("❌ Missing ENV variables!");
 }
 
-// 🤖 OpenRouter AI function
+// 🤖 OpenRouter AI function (FINAL FIXED)
 async function getAIReply(userMessage) {
   try {
     const response = await axios.post(
@@ -34,12 +34,17 @@ async function getAIReply(userMessage) {
       {
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://whatsapp-webhook-efcw.onrender.com",
+          "X-Title": "WhatsApp Bot"
         }
       }
     );
 
-    const text = response.data.choices?.[0]?.message?.content || "Hmm… try again 🤖";
+    const text =
+      response.data.choices?.[0]?.message?.content ||
+      "Hmm… try again 🤖";
+
     return text.slice(0, 1500);
 
   } catch (error) {
@@ -84,7 +89,7 @@ app.post("/webhook", async (req, res) => {
         reply = await getAIReply(text);
       }
 
-      // 📩 Send message
+      // 📩 Send reply to WhatsApp
       await axios.post(
         `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
         {
