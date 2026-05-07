@@ -19,8 +19,9 @@ const credentials = JSON.parse(
 );
 
 // ✅ FIX PRIVATE KEY
-credentials.private_key =
-  credentials.private_key.replace(/\\n/g, "\n");
+credentials.private_key = credentials.private_key
+  .replace(/\\\\n/g, "\n")
+  .replace(/\\n/g, "\n");
 
 // ✅ GOOGLE AUTH
 const auth = new google.auth.GoogleAuth({
