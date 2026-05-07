@@ -15,7 +15,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // ✅ GOOGLE SHEETS ENV JSON
 const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-
+credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
 // ✅ GOOGLE SHEETS AUTH
 const auth = new google.auth.GoogleAuth({
   credentials,
