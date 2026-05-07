@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const axios = require("axios");
+const { google } = require("googleapis");
 
 const app = express();
 app.use(express.json());
@@ -12,12 +13,53 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+// ✅ GOOGLE SHEETS SETUP
+const auth = new google.auth.GoogleAuth({
+    keyFile: "learnmateai-495610-7171574cd064.json",
+  scopes: ["https://www.googleapis.com/auth/spreadsheets"],
+});
+
+const sheets = google.sheets({
+  version: "v4",
+  auth,
+});
+
+// ✅ PASTE YOUR GOOGLE SHEET ID
+const SPREADSHEET_ID = "1zgx1MFxfxKTTX7AZ8QrHc8OVQSE6JOUH325ndJaQFXE";
+
 // 🚨 Safety check
 if (!ACCESS_TOKEN || !PHONE_NUMBER_ID || !OPENAI_API_KEY) {
   console.log("❌ Missing ENV variables!");
 }
 
-// 🤖 OpenRouter AI function (FINAL FIXED)
+// ✅ SAVE DATA TO GOOGLE SHEET
+async function saveToSheet(name, phone, message, reply) {
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SPREADSHEET_ID,
+      range: "Sheet1!A:E",
+      valueInputOption: "USER_ENTERED",
+      requestBody: {
+        values: [
+          [
+            name,
+            phone,
+            message,
+            reply,
+            new Date().toLocaleString(),
+          ],
+        ],
+      },
+    });
+
+    console.log("✅ Data saved to Google Sheet");
+
+  } catch (error) {
+    console.log("❌ Google Sheets Error:", error.message);
+  }
+}
+
+// 🤖 OpenRouter AI function
 async function getAIReply(userMessage) {
   try {
     const response = await axios.post(
@@ -89,6 +131,14 @@ app.post("/webhook", async (req, res) => {
         reply = await getAIReply(text);
       }
 
+      // ✅ SAVE TO GOOGLE SHEET
+      await saveToSheet(
+        "Bhavesh",
+        from,
+        text,
+        reply
+      );
+
       // 📩 Send reply to WhatsApp
       await axios.post(
         `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
@@ -107,6 +157,7 @@ app.post("/webhook", async (req, res) => {
     }
 
     res.sendStatus(200);
+
   } catch (err) {
     console.error("❌ WhatsApp Error:", err.response?.data || err.message);
     res.sendStatus(500);
