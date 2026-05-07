@@ -2,6 +2,10 @@ require("dotenv").config();
 
 const express = require("express");
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
+const pdfParse = require("pdf-parse");
+const Tesseract = require("tesseract.js");
 const { google } = require("googleapis");
 
 const app = express();
@@ -13,7 +17,7 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// ✅ GOOGLE SERVICE ACCOUNT FROM RENDER ENV
+// ✅ GOOGLE SERVICE ACCOUNT
 const credentials = JSON.parse(
   process.env.GOOGLE_SERVICE_ACCOUNT
 );
@@ -78,7 +82,7 @@ async function saveToSheet(name, phone, message, reply) {
   }
 }
 
-// 🤖 OPENROUTER AI FUNCTION
+// 🤖 AI FUNCTION
 async function getAIReply(userMessage) {
   try {
     const response = await axios.post(
@@ -89,7 +93,7 @@ async function getAIReply(userMessage) {
           {
             role: "system",
             content:
-              "You are a friendly WhatsApp AI assistant. Reply short, smart and Hinglish style."
+              "You are a friendly WhatsApp AI assistant. Reply short and easy Hinglish style."
           },
           {
             role: "user",
@@ -108,11 +112,10 @@ async function getAIReply(userMessage) {
       }
     );
 
-    const text =
+    return (
       response.data.choices?.[0]?.message?.content ||
-      "Hmm… try again 🤖";
-
-    return text.slice(0, 1500);
+      "AI error 😅"
+    ).slice(0, 1500);
 
   } catch (error) {
     console.log(
@@ -122,6 +125,57 @@ async function getAIReply(userMessage) {
 
     return "AI error aa gaya 😅";
   }
+}
+
+// ✅ DOWNLOAD MEDIA
+async function downloadMedia(mediaId, outputPath) {
+  try {
+    const mediaRes = await axios.get(
+      `https://graph.facebook.com/v19.0/${mediaId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${ACCESS_TOKEN}`
+        }
+      }
+    );
+
+    const mediaUrl = mediaRes.data.url;
+
+    const media = await axios.get(mediaUrl, {
+      responseType: "arraybuffer",
+      headers: {
+        Authorization: `Bearer ${ACCESS_TOKEN}`
+      }
+    });
+
+    fs.writeFileSync(outputPath, media.data);
+
+    console.log("✅ Media downloaded");
+
+  } catch (error) {
+    console.log(
+      "❌ Media download error:",
+      error.message
+    );
+  }
+}
+
+// ✅ PDF TEXT EXTRACTION
+async function extractPDFText(filePath) {
+  const dataBuffer = fs.readFileSync(filePath);
+  const data = await pdfParse(dataBuffer);
+
+  return data.text;
+}
+
+// ✅ IMAGE OCR
+async function extractImageText(filePath) {
+  const result = await Tesseract.recognize(
+    filePath,
+    "eng"
+  );
+
+  return result.data.text;
 }
 
 // ✅ VERIFY WEBHOOK
@@ -146,31 +200,104 @@ app.post("/webhook", async (req, res) => {
 
     if (message) {
       const from = message.from;
-      const text = message.text?.body || "";
 
-      console.log("📩 User:", text);
-
+      let text = "";
       let reply = "";
 
-      // 🎯 CUSTOM REPLIES
-      if (
-        text.toLowerCase() === "hi" ||
-        text.toLowerCase() === "hello"
-      ) {
-        reply = "Hello Bhavesh 😎";
-      }
-      else if (text.toLowerCase() === "help") {
-        reply = "Ask me anything 🤖";
-      }
-      else {
-        reply = await getAIReply(text);
+      // ✅ TEXT MESSAGE
+      if (message.type === "text") {
+        text = message.text.body;
+
+        console.log("📩 User:", text);
+
+        if (
+          text.toLowerCase() === "hi" ||
+          text.toLowerCase() === "hello"
+        ) {
+          reply = "Hello Bhavesh 😎";
+        }
+        else if (text.toLowerCase() === "help") {
+          reply = "Send text, PDF or image 📄🖼️";
+        }
+        else {
+          reply = await getAIReply(text);
+        }
       }
 
-      // ✅ SAVE CHAT TO SHEET
+      // ✅ PDF DOCUMENT
+      else if (message.type === "document") {
+        text = "PDF Uploaded";
+
+        const mediaId = message.document.id;
+
+        const fileName =
+          `file_${Date.now()}.pdf`;
+
+        const filePath = path.join(
+          __dirname,
+          fileName
+        );
+
+        await downloadMedia(mediaId, filePath);
+
+        const extractedText = (
+          await extractPDFText(filePath)
+        ).slice(0, 5000);
+
+        reply = await getAIReply(
+          `Summarize this PDF in easy Hinglish:\n${extractedText}`
+        );
+
+        // ✅ SAFE DELETE
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+
+      // ✅ IMAGE MESSAGE
+      else if (message.type === "image") {
+        text = "Image Uploaded";
+
+        const mediaId = message.image.id;
+
+        const filePath = path.join(
+          __dirname,
+          `image_${Date.now()}.jpg`
+        );
+
+        await downloadMedia(mediaId, filePath);
+
+        const extractedText = (
+          await extractImageText(filePath)
+        ).slice(0, 3000);
+
+        // ✅ EMPTY OCR CHECK
+        if (!extractedText.trim()) {
+          reply = "Image me text detect nahi hua 😅";
+        }
+        else {
+          reply = await getAIReply(
+            `Explain these notes in easy Hinglish:\n${extractedText}`
+          );
+        }
+
+        // ✅ SAFE DELETE
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+
+      // ✅ UNSUPPORTED MESSAGE
+      else {
+        reply =
+          "Abhi main sirf text, PDF aur images samajh sakta hu 😄";
+      }
+
+      // ✅ SAVE TO GOOGLE SHEET
       await saveToSheet(
         "Bhavesh",
         from,
-        text,
+        text || "Unknown Message",
         reply
       );
 
