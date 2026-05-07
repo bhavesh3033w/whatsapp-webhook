@@ -13,9 +13,12 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// ✅ GOOGLE SHEETS SETUP
+// ✅ GOOGLE SHEETS ENV JSON
+const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+
+// ✅ GOOGLE SHEETS AUTH
 const auth = new google.auth.GoogleAuth({
-    keyFile: "learnmateai-495610-227defdddb0a.json",
+  credentials,
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
@@ -24,11 +27,16 @@ const sheets = google.sheets({
   auth,
 });
 
-// ✅ PASTE YOUR GOOGLE SHEET ID
+// ✅ GOOGLE SHEET ID
 const SPREADSHEET_ID = "1zgx1MFxfxKTTX7AZ8QrHc8OVQSE6JOUH325ndJaQFXE";
 
 // 🚨 Safety check
-if (!ACCESS_TOKEN || !PHONE_NUMBER_ID || !OPENAI_API_KEY) {
+if (
+  !ACCESS_TOKEN ||
+  !PHONE_NUMBER_ID ||
+  !OPENAI_API_KEY ||
+  !process.env.GOOGLE_SERVICE_ACCOUNT
+) {
   console.log("❌ Missing ENV variables!");
 }
 
@@ -55,11 +63,14 @@ async function saveToSheet(name, phone, message, reply) {
     console.log("✅ Data saved to Google Sheet");
 
   } catch (error) {
-    console.log("❌ Google Sheets Error:", error.message);
+    console.log(
+      "❌ Google Sheets Error:",
+      error.response?.data || error.message
+    );
   }
 }
 
-// 🤖 OpenRouter AI function
+// 🤖 OPENROUTER AI FUNCTION
 async function getAIReply(userMessage) {
   try {
     const response = await axios.post(
@@ -68,8 +79,13 @@ async function getAIReply(userMessage) {
         model: "openai/gpt-3.5-turbo",
         messages: [
           {
+            role: "system",
+            content:
+              "You are a friendly WhatsApp AI assistant. Reply short, smart and Hinglish style."
+          },
+          {
             role: "user",
-            content: `Reply in short WhatsApp style (friendly Hinglish): ${userMessage}`
+            content: userMessage
           }
         ]
       },
@@ -90,48 +106,58 @@ async function getAIReply(userMessage) {
     return text.slice(0, 1500);
 
   } catch (error) {
-    console.log("🔥 AI ERROR:", error.response?.data || error.message);
-    return "AI error aa gaya 😅 try again.";
+    console.log(
+      "🔥 AI ERROR:",
+      error.response?.data || error.message
+    );
+
+    return "AI error aa gaya 😅";
   }
 }
 
-// 🔹 Verify Webhook
+// ✅ VERIFY WEBHOOK
 app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
   if (mode === "subscribe" && token === VERIFY_TOKEN) {
-    console.log("Webhook verified ✅");
+    console.log("✅ Webhook verified");
     return res.status(200).send(challenge);
-  } else {
-    return res.sendStatus(403);
   }
+
+  return res.sendStatus(403);
 });
 
-// 🔹 Receive message
+// ✅ RECEIVE MESSAGE
 app.post("/webhook", async (req, res) => {
   try {
-    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const message =
+      req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
 
     if (message) {
       const from = message.from;
-      const text = message.text?.body?.toLowerCase() || "";
+      const text = message.text?.body || "";
 
-      console.log("User:", text);
+      console.log("📩 User:", text);
 
       let reply = "";
 
-      // 🎯 Custom replies
-      if (text === "hi" || text === "hello") {
+      // 🎯 CUSTOM REPLIES
+      if (
+        text.toLowerCase() === "hi" ||
+        text.toLowerCase() === "hello"
+      ) {
         reply = "Hello Bhavesh 😎";
-      } else if (text === "help") {
+      }
+      else if (text.toLowerCase() === "help") {
         reply = "Ask me anything 🤖";
-      } else {
+      }
+      else {
         reply = await getAIReply(text);
       }
 
-      // ✅ SAVE TO GOOGLE SHEET
+      // ✅ SAVE CHAT TO SHEET
       await saveToSheet(
         "Bhavesh",
         from,
@@ -139,13 +165,15 @@ app.post("/webhook", async (req, res) => {
         reply
       );
 
-      // 📩 Send reply to WhatsApp
+      // ✅ SEND WHATSAPP MESSAGE
       await axios.post(
         `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
         {
           messaging_product: "whatsapp",
           to: from,
-          text: { body: reply }
+          text: {
+            body: reply
+          }
         },
         {
           headers: {
@@ -154,21 +182,30 @@ app.post("/webhook", async (req, res) => {
           }
         }
       );
+
+      console.log("✅ Reply sent");
     }
 
     res.sendStatus(200);
 
   } catch (err) {
-    console.error("❌ WhatsApp Error:", err.response?.data || err.message);
+    console.error(
+      "❌ WhatsApp Error:",
+      err.response?.data || err.message
+    );
+
     res.sendStatus(500);
   }
 });
 
-// 🔹 Health check
+// ✅ HEALTH CHECK
 app.get("/", (req, res) => {
-  res.send("WhatsApp AI bot running 🚀");
+  res.send("WhatsApp AI Bot running 🚀");
 });
 
-// 🔹 Start server
+// ✅ START SERVER
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
