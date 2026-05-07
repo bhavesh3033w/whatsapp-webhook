@@ -15,7 +15,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // ✅ GOOGLE SHEETS SETUP
 const auth = new google.auth.GoogleAuth({
-    keyFile: "learnmateai-495610-7171574cd064.json",
+    keyFile: "learnmateai-495610-227defdddb0a.json",
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
