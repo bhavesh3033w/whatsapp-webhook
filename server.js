@@ -13,12 +13,9 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// ✅ GOOGLE SHEETS ENV JSON
-const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
-credentials.private_key = credentials.private_key.replace(/\\n/g, '\n');
 // ✅ GOOGLE SHEETS AUTH
 const auth = new google.auth.GoogleAuth({
-  credentials,
+  keyFile: "./learnmateai-495610-227defdddb0a.json",
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
@@ -28,14 +25,14 @@ const sheets = google.sheets({
 });
 
 // ✅ GOOGLE SHEET ID
-const SPREADSHEET_ID = "1zgx1MFxfxKTTX7AZ8QrHc8OVQSE6JOUH325ndJaQFXE";
+const SPREADSHEET_ID =
+  "1zgx1MFxfxKTTX7AZ8QrHc8OVQSE6JOUH325ndJaQFXE";
 
-// 🚨 Safety check
+// 🚨 SAFETY CHECK
 if (
   !ACCESS_TOKEN ||
   !PHONE_NUMBER_ID ||
-  !OPENAI_API_KEY ||
-  !process.env.GOOGLE_SERVICE_ACCOUNT
+  !OPENAI_API_KEY
 ) {
   console.log("❌ Missing ENV variables!");
 }
@@ -93,7 +90,8 @@ async function getAIReply(userMessage) {
         headers: {
           Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://whatsapp-webhook-efcw.onrender.com",
+          "HTTP-Referer":
+            "https://whatsapp-webhook-efcw.onrender.com",
           "X-Title": "WhatsApp Bot"
         }
       }
@@ -157,7 +155,7 @@ app.post("/webhook", async (req, res) => {
         reply = await getAIReply(text);
       }
 
-      // ✅ SAVE CHAT TO SHEET
+      // ✅ SAVE TO GOOGLE SHEET
       await saveToSheet(
         "Bhavesh",
         from,
@@ -165,7 +163,7 @@ app.post("/webhook", async (req, res) => {
         reply
       );
 
-      // ✅ SEND WHATSAPP MESSAGE
+      // ✅ SEND WHATSAPP REPLY
       await axios.post(
         `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
         {
