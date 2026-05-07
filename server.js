@@ -13,9 +13,18 @@ const ACCESS_TOKEN = process.env.ACCESS_TOKEN;
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// ✅ GOOGLE SHEETS AUTH
+// ✅ GOOGLE SERVICE ACCOUNT FROM RENDER ENV
+const credentials = JSON.parse(
+  process.env.GOOGLE_SERVICE_ACCOUNT
+);
+
+// ✅ FIX PRIVATE KEY
+credentials.private_key =
+  credentials.private_key.replace(/\\n/g, "\n");
+
+// ✅ GOOGLE AUTH
 const auth = new google.auth.GoogleAuth({
-  keyFile: "./learnmateai-495610-227defdddb0a.json",
+  credentials,
   scopes: ["https://www.googleapis.com/auth/spreadsheets"],
 });
 
@@ -32,7 +41,8 @@ const SPREADSHEET_ID =
 if (
   !ACCESS_TOKEN ||
   !PHONE_NUMBER_ID ||
-  !OPENAI_API_KEY
+  !OPENAI_API_KEY ||
+  !process.env.GOOGLE_SERVICE_ACCOUNT
 ) {
   console.log("❌ Missing ENV variables!");
 }
@@ -155,7 +165,7 @@ app.post("/webhook", async (req, res) => {
         reply = await getAIReply(text);
       }
 
-      // ✅ SAVE TO GOOGLE SHEET
+      // ✅ SAVE CHAT TO SHEET
       await saveToSheet(
         "Bhavesh",
         from,
